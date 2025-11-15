@@ -33,7 +33,7 @@ final class CoinListViewModelProvider
   CoinListViewModel create() => CoinListViewModel();
 }
 
-String _$coinListViewModelHash() => r'0ca768d7b1f811a6c52baa4131e334a03f61b387';
+String _$coinListViewModelHash() => r'5e9104de98494f9bd3bcc032d4f7cff0a2fbca21';
 
 abstract class _$CoinListViewModel extends $AsyncNotifier<List<CoinModel>> {
   FutureOr<List<CoinModel>> build();

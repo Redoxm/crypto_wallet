@@ -51,7 +51,7 @@ A beautiful, feature-rich cryptocurrency tracking application built with Flutter
 
 ## 🎥 Demo Video
 
-[Link to demo video - to be added]
+[https://drive.google.com/file/d/1dM4WpKsC9o7IubkRXTEl2WCkK-VMPvO3/view?usp=drivesdk]
 
 ## 🏗️ Architecture
 
@@ -231,7 +231,7 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## 📧 Contact
 
-Luqman Adebayo - [@Adebayoluqman](https://twitter.com/yourtwitter)
+Luqman Adebayo - [@Adebayoluqman](https://twitter.com/Adebayo)
 
 Project Link: [https://github.com/Redoxm/crypto_wallet.git](https://github.com/Redoxm/crypto_wallet)
 

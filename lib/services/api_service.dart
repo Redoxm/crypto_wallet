@@ -1,23 +1,46 @@
 import 'package:crypto_wallet/core/network/io_client.dart';
 import 'package:dio/dio.dart';
+import 'dart:convert';
 import '../core/constants/api_constants.dart';
 import '../models/coin_model.dart';
 import '../models/coin_detail_model.dart';
+import 'local_storage_service.dart';
 
 class ApiService {
   final DioClient _dioClient;
+  final LocalStorageService _localStorage;
 
-  // Cache for API responses
-  final Map<String, CachedResponse> _cache = {};
+  // Cache for API responses (in-memory for quick access)
+  final Map<String, CachedResponse> _memoryCache = {};
   static const Duration _cacheDuration = Duration(minutes: 5);
 
-  ApiService(this._dioClient); // Get list of coins with caching
+  ApiService(this._dioClient, this._localStorage);
+
+  // Get list of coins with persistent caching
   Future<List<CoinModel>> getCoins() async {
     const cacheKey = 'coins_list';
 
-    // Try to get from cache first
-    if (_cache.containsKey(cacheKey) && !_cache[cacheKey]!.isExpired) {
-      return _cache[cacheKey]!.data as List<CoinModel>;
+    // Check in-memory cache first (fastest)
+    if (_memoryCache.containsKey(cacheKey) &&
+        !_memoryCache[cacheKey]!.isExpired) {
+      return _memoryCache[cacheKey]!.data as List<CoinModel>;
+    }
+
+    // Check persistent cache (survives app restart)
+    if (!_localStorage.isCacheExpired(cacheKey, _cacheDuration)) {
+      final cachedData = _localStorage.getCache(cacheKey);
+      if (cachedData != null) {
+        final jsonList = json.decode(cachedData['data'] as String) as List;
+        final coins = jsonList.map((json) => CoinModel.fromJson(json)).toList();
+
+        // Store in memory cache for quick access
+        _memoryCache[cacheKey] = CachedResponse(
+          data: coins,
+          timestamp: DateTime.now(),
+        );
+
+        return coins;
+      }
     }
 
     try {
@@ -36,26 +59,54 @@ class ApiService {
       final List<dynamic> data = response.data;
       final coins = data.map((json) => CoinModel.fromJson(json)).toList();
 
-      // Cache the response
-      _cache[cacheKey] = CachedResponse(data: coins, timestamp: DateTime.now());
+      // Save to both memory and persistent cache
+      _memoryCache[cacheKey] = CachedResponse(
+        data: coins,
+        timestamp: DateTime.now(),
+      );
+      await _localStorage.saveCache(cacheKey, json.encode(data));
 
       return coins;
     } on DioException catch (e) {
-      // If network fails, try to return cached data even if expired
-      if (_cache.containsKey(cacheKey)) {
-        return _cache[cacheKey]!.data as List<CoinModel>;
+      // If network fails, try persistent cache even if expired
+      final cachedData = _localStorage.getCache(cacheKey);
+      if (cachedData != null) {
+        final jsonList = json.decode(cachedData['data'] as String) as List;
+        return jsonList.map((json) => CoinModel.fromJson(json)).toList();
       }
+
+      // If no cache at all, try memory cache even if expired
+      if (_memoryCache.containsKey(cacheKey)) {
+        return _memoryCache[cacheKey]!.data as List<CoinModel>;
+      }
+
       throw _handleError(e);
     }
   }
 
-  // Get coin details with caching
+  // Get coin details with persistent caching
   Future<CoinDetailModel> getCoinDetail(String coinId) async {
     final cacheKey = 'coin_detail_$coinId';
 
-    // Try to get from cache first
-    if (_cache.containsKey(cacheKey) && !_cache[cacheKey]!.isExpired) {
-      return _cache[cacheKey]!.data as CoinDetailModel;
+    // Check in-memory cache first
+    if (_memoryCache.containsKey(cacheKey) &&
+        !_memoryCache[cacheKey]!.isExpired) {
+      return _memoryCache[cacheKey]!.data as CoinDetailModel;
+    }
+
+    // Check persistent cache
+    if (!_localStorage.isCacheExpired(cacheKey, _cacheDuration)) {
+      final cachedData = _localStorage.getCache(cacheKey);
+      if (cachedData != null) {
+        final coinDetail = CoinDetailModel.fromJson(
+          json.decode(cachedData['data'] as String),
+        );
+        _memoryCache[cacheKey] = CachedResponse(
+          data: coinDetail,
+          timestamp: DateTime.now(),
+        );
+        return coinDetail;
+      }
     }
 
     try {
@@ -72,29 +123,55 @@ class ApiService {
 
       final coinDetail = CoinDetailModel.fromJson(response.data);
 
-      // Cache the response
-      _cache[cacheKey] = CachedResponse(
+      // Save to both caches
+      _memoryCache[cacheKey] = CachedResponse(
         data: coinDetail,
         timestamp: DateTime.now(),
       );
+      await _localStorage.saveCache(cacheKey, json.encode(response.data));
 
       return coinDetail;
     } on DioException catch (e) {
-      // If network fails, try to return cached data even if expired
-      if (_cache.containsKey(cacheKey)) {
-        return _cache[cacheKey]!.data as CoinDetailModel;
+      // If network fails, try persistent cache even if expired
+      final cachedData = _localStorage.getCache(cacheKey);
+      if (cachedData != null) {
+        return CoinDetailModel.fromJson(
+          json.decode(cachedData['data'] as String),
+        );
       }
+
+      // Try memory cache
+      if (_memoryCache.containsKey(cacheKey)) {
+        return _memoryCache[cacheKey]!.data as CoinDetailModel;
+      }
+
       throw _handleError(e);
     }
   }
 
-  // Get market chart with caching
+  // Get market chart with persistent caching
   Future<MarketChartModel> getMarketChart(String coinId) async {
     final cacheKey = 'market_chart_$coinId';
 
-    // Try to get from cache first
-    if (_cache.containsKey(cacheKey) && !_cache[cacheKey]!.isExpired) {
-      return _cache[cacheKey]!.data as MarketChartModel;
+    // Check in-memory cache first
+    if (_memoryCache.containsKey(cacheKey) &&
+        !_memoryCache[cacheKey]!.isExpired) {
+      return _memoryCache[cacheKey]!.data as MarketChartModel;
+    }
+
+    // Check persistent cache
+    if (!_localStorage.isCacheExpired(cacheKey, _cacheDuration)) {
+      final cachedData = _localStorage.getCache(cacheKey);
+      if (cachedData != null) {
+        final chartData = MarketChartModel.fromJson(
+          json.decode(cachedData['data'] as String),
+        );
+        _memoryCache[cacheKey] = CachedResponse(
+          data: chartData,
+          timestamp: DateTime.now(),
+        );
+        return chartData;
+      }
     }
 
     try {
@@ -105,25 +182,36 @@ class ApiService {
 
       final chartData = MarketChartModel.fromJson(response.data);
 
-      // Cache the response
-      _cache[cacheKey] = CachedResponse(
+      // Save to both caches
+      _memoryCache[cacheKey] = CachedResponse(
         data: chartData,
         timestamp: DateTime.now(),
       );
+      await _localStorage.saveCache(cacheKey, json.encode(response.data));
 
       return chartData;
     } on DioException catch (e) {
-      // If network fails, try to return cached data even if expired
-      if (_cache.containsKey(cacheKey)) {
-        return _cache[cacheKey]!.data as MarketChartModel;
+      // If network fails, try persistent cache even if expired
+      final cachedData = _localStorage.getCache(cacheKey);
+      if (cachedData != null) {
+        return MarketChartModel.fromJson(
+          json.decode(cachedData['data'] as String),
+        );
       }
+
+      // Try memory cache
+      if (_memoryCache.containsKey(cacheKey)) {
+        return _memoryCache[cacheKey]!.data as MarketChartModel;
+      }
+
       throw _handleError(e);
     }
   }
 
   // Clear cache manually if needed
   void clearCache() {
-    _cache.clear();
+    _memoryCache.clear();
+    _localStorage.clearAllCache();
   }
 
   // Handle errors with better messages

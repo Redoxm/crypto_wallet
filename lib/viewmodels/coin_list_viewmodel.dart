@@ -10,12 +10,15 @@ part 'coin_list_viewmodel.g.dart';
 // Providers
 final dioClientProvider = Provider<DioClient>((ref) => DioClient());
 
-final apiServiceProvider = Provider<ApiService>((ref) {
-  return ApiService(ref.read(dioClientProvider));
-});
-
 final localStorageProvider = Provider<LocalStorageService>((ref) {
   return LocalStorageService();
+});
+
+final apiServiceProvider = Provider<ApiService>((ref) {
+  return ApiService(
+    ref.read(dioClientProvider),
+    ref.read(localStorageProvider),
+  );
 });
 
 // Coin List ViewModel
